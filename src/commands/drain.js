@@ -8,9 +8,16 @@ const { getDrains, createDrain, deleteDrain, updateDrainState } = require('@clev
 const { sendToApi } = require('../models/send-to-api.js');
 
 async function list (params) {
-  const { alias } = params.options;
+  const { alias, addon } = params.options;
 
-  const { app_id: appId } = await AppConfig.getAppData(alias).toPromise();
+  let appOrAddonId = null;
+  if (addon) {
+    appOrAddonId = addon;
+  } else {
+    appOrAddonId = await AppConfig.getAppData(alias).toPromise();
+  }
+
+  const appId = appOrAddonId; // required to keep compatibily with clever-client.js usage
   const drains = await getDrains({ appId }).then(sendToApi);
 
   drains.forEach((drain) => {
@@ -21,12 +28,20 @@ async function list (params) {
 
 async function create (params) {
   const [drainTargetType, drainTargetURL] = params.args;
-  const { alias, username, password, 'api-key': apiKey } = params.options;
+  const { alias, addon, username, password, 'api-key': apiKey } = params.options;
   const drainTargetCredentials = { username, password };
   const drainTargetConfig = { apiKey };
 
-  const { app_id: appId } = await AppConfig.getAppData(alias).toPromise();
-  const body = createDrainBody(appId, drainTargetURL, drainTargetType, drainTargetCredentials, drainTargetConfig);
+  let appOrAddonId = null;
+  if (addon) {
+    appOrAddonId = addon;
+  } else {
+    appOrAddonId = await AppConfig.getAppData(alias).toPromise();
+  }
+
+  const body = createDrainBody(appOrAddonId, drainTargetURL, drainTargetType, drainTargetCredentials, drainTargetConfig);
+
+  const appId = appOrAddonId; // required to keep compatibily with clever-client.js usage
   await createDrain({ appId }, body).then(sendToApi);
 
   Logger.println('Your drain has been successfully saved');
