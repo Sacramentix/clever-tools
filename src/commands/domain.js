@@ -1,44 +1,92 @@
 'use strict';
 
-const _ = require('lodash');
-
 const AppConfig = require('../models/app_configuration.js');
-const Domain = require('../models/domain.js');
-const handleCommandStream = require('../command-stream-handler');
 const Logger = require('../logger.js');
+const {
+  get: getApp,
+  addDomain,
+  getFavouriteDomain: getFavouriteDomainWithError,
+  markFavouriteDomain,
+  unmarkFavouriteDomain,
+  removeDomain,
+} = require('@clevercloud/client/cjs/api/application.js');
+const { sendToApi } = require('../models/send-to-api.js');
 
-function list (api, params) {
-  const { alias } = params.options;
-
-  const s_domains = AppConfig.getAppData(alias)
-    .flatMapLatest((appData) => Domain.list(api, appData.app_id, appData.org_id))
-    .map((domains) => {
-      return _.forEach(domains, ({ fqdn }) => Logger.println(fqdn));
+function getFavouriteDomain ({ ownerId, appId }) {
+  return getFavouriteDomainWithError({ id: ownerId, appId })
+    .then(sendToApi)
+    .then(({ fqdn }) => fqdn)
+    .catch((error) => {
+      if (error.id === 4021) {
+        // No favourite vhost
+        return null;
+      }
+      throw error;
     });
-
-  handleCommandStream(s_domains);
 }
 
-function add (api, params) {
+async function list (params) {
+  const { alias } = params.options;
+  const { ownerId, appId } = await AppConfig.getAppDetails({ alias });
+
+  const app = await getApp({ id: ownerId, appId }).then(sendToApi);
+  const favouriteDomain = await getFavouriteDomain({ ownerId, appId });
+  return app.vhosts.forEach(({ fqdn }) => {
+    const prefix = (fqdn === favouriteDomain)
+      ? '* '
+      : '  ';
+    Logger.println(prefix + fqdn);
+  });
+}
+
+async function add (params) {
   const [fqdn] = params.args;
   const { alias } = params.options;
+  const { ownerId, appId } = await AppConfig.getAppDetails({ alias });
+  const encodedFqdn = encodeURIComponent(fqdn);
 
-  const s_domain = AppConfig.getAppData(alias)
-    .flatMapLatest((appData) => Domain.create(api, fqdn, appData.app_id, appData.org_id))
-    .map(() => Logger.println('Your domain has been successfully saved'));
-
-  handleCommandStream(s_domain);
+  await addDomain({ id: ownerId, appId, domain: encodedFqdn }).then(sendToApi);
+  Logger.println('Your domain has been successfully saved');
 }
 
-function rm (api, params) {
+async function getFavourite (params) {
+  const { alias } = params.options;
+  const { ownerId, appId } = await AppConfig.getAppDetails({ alias });
+
+  const favouriteDomain = await getFavouriteDomain({ ownerId, appId });
+
+  if (favouriteDomain == null) {
+    return Logger.println('No favourite domain set');
+  }
+
+  return Logger.println(favouriteDomain);
+}
+
+async function setFavourite (params) {
   const [fqdn] = params.args;
   const { alias } = params.options;
+  const { ownerId, appId } = await AppConfig.getAppDetails({ alias });
 
-  const s_domain = AppConfig.getAppData(alias)
-    .flatMapLatest((appData) => Domain.remove(api, fqdn, appData.app_id, appData.org_id))
-    .map(() => Logger.println('Your domain has been successfully removed'));
-
-  handleCommandStream(s_domain);
+  await markFavouriteDomain({ id: ownerId, appId }, { fqdn }).then(sendToApi);
+  Logger.println('Your favourite domain has been successfully set');
 }
 
-module.exports = { list, add, rm };
+async function unsetFavourite (params) {
+  const { alias } = params.options;
+  const { ownerId, appId } = await AppConfig.getAppDetails({ alias });
+
+  await unmarkFavouriteDomain({ id: ownerId, appId }).then(sendToApi);
+  Logger.println('Favourite domain has been successfully unset');
+}
+
+async function rm (params) {
+  const [fqdn] = params.args;
+  const { alias } = params.options;
+  const { ownerId, appId } = await AppConfig.getAppDetails({ alias });
+  const encodedFqdn = encodeURIComponent(fqdn);
+
+  await removeDomain({ id: ownerId, appId, domain: encodedFqdn }).then(sendToApi);
+  Logger.println('Your domain has been successfully removed');
+}
+
+module.exports = { list, add, getFavourite, setFavourite, unsetFavourite, rm };

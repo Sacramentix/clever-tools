@@ -1,5 +1,7 @@
 'use strict';
 
+const autocomplete = require('cliparse').autocomplete;
+
 const DRAIN_TYPES = [
   { id: 'TCPSyslog' },
   { id: 'UDPSyslog' },
@@ -11,7 +13,7 @@ const DRAIN_TYPES = [
 function createDrainBody (appId, drainTargetURL, drainTargetType, drainTargetCredentials, drainTargetConfig) {
 
   if (!authorizeDrainCreation(drainTargetType, drainTargetCredentials)) {
-    throw new Error(`Credentials are: optional for HTTP, mandatory for ElasticSearch and TCPSyslog/UDPSyslog don't need them.`);
+    throw new Error("Credentials are: optional for HTTP, mandatory for ElasticSearch and TCPSyslog/UDPSyslog don't need them.");
   }
 
   const body = {
@@ -57,7 +59,12 @@ function credentialsEmpty ({ username, password }) {
   return username == null && password == null;
 }
 
+function listDrainTypes () {
+  return autocomplete.words(DRAIN_TYPES.map((type) => type.id));
+}
+
 module.exports = {
   createDrainBody,
   authorizeDrainCreation,
+  listDrainTypes,
 };

@@ -28,7 +28,7 @@ function pollOauthData (url, tryCount = 0) {
     throw new Error('Something went wrong while trying to log you in.');
   }
   if (tryCount > 1 && tryCount % 10 === 0) {
-    Logger.println(`We're still waiting for the login process (in your browser) to be completed…`);
+    Logger.println("We're still waiting for the login process (in your browser) to be completed…");
   }
 
   return superagent
@@ -69,12 +69,12 @@ async function login (params) {
   const isInteractiveLogin = (token == null && secret == null);
 
   if (isLoginWithArgs) {
-    return writeOAuthConf({ token, secret }).toPromise();
+    return writeOAuthConf({ token, secret });
   }
 
   if (isInteractiveLogin) {
     const oauthData = await loginViaConsole();
-    await writeOAuthConf(oauthData).toPromise();
+    await writeOAuthConf(oauthData);
     const { name, email } = await User.getCurrent();
     const formattedName = name || colors.red.bold('[unspecified name]');
     return Logger.println(`Login successful as ${formattedName} <${email}>`);

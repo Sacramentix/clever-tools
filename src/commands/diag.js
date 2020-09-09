@@ -2,7 +2,7 @@
 
 const os = require('os');
 
-const getLinuxInfos = require('linux-release-info');
+const { releaseInfo: getLinuxInfos } = require('linux-release-info');
 const colors = require('colors/safe');
 
 const Logger = require('../logger.js');
@@ -12,8 +12,8 @@ const { loadOAuthConf } = require('../models/configuration.js');
 
 async function diag () {
 
-  const userId = await User.getCurrent().then((u) => u.id).catch(() => 'Not connected');
-  const oauthToken = await loadOAuthConf().toPromise().then((o) => o.token).catch(() => 'Not connected');
+  const userId = await User.getCurrentId().catch(() => 'Not connected');
+  const oauthToken = await loadOAuthConf().then((o) => o.token).catch(() => 'Not connected');
 
   Logger.println('clever-tools  ' + colors.green(pkg.version));
   Logger.println('Node.js       ' + colors.green(process.version));

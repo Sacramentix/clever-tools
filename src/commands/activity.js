@@ -1,16 +1,15 @@
 'use strict';
 
-const _ = require('lodash');
-const Bacon = require('baconjs');
 const colors = require('colors/safe');
 const moment = require('moment');
 
 const Activity = require('../models/activity.js');
 const AppConfig = require('../models/app_configuration.js');
-const Event = require('../models/events.js');
 const formatTable = require('../format-table');
-const handleCommandStream = require('../command-stream-handler');
 const Logger = require('../logger.js');
+const { Deferred } = require('../models/utils.js');
+const { EventsStream } = require('@clevercloud/client/cjs/streams/events.node.js');
+const { getHostAndTokens } = require('../models/send-to-api.js');
 
 function getColoredState (state, isLast) {
   if (state === 'OK') {
@@ -62,55 +61,63 @@ function clearPreviousLine () {
   if (process.stdout.isTTY) {
     process.stdout.moveCursor(0, -1);
     process.stdout.cursorTo(0);
-    process.stdout.clearLine();
+    process.stdout.clearLine(0);
   }
 }
 
-function activity (api, params) {
-  const { alias, 'show-all': showAll, follow } = params.options;
+function handleEvent (previousEvent, event) {
+  if (isTemporaryEvent(previousEvent)) {
+    clearPreviousLine();
+  }
 
-  const s_activity = AppConfig.getAppData(alias)
-    .flatMapLatest((appData) => {
+  const activityLine = formatActivityLine(event);
+  Logger.println(activityLine);
 
-      const s_oldActivity = Activity.list(api, appData.app_id, appData.org_id, showAll)
-        .flatMapLatest((events) => {
-          const reversedArrayWithIndex = events
-            .reverse()
-            .map((event, index, all) => {
-              const isLast = index === all.length - 1;
-              return ({ ...event, isLast });
-            });
-          return Bacon.fromArray(reversedArrayWithIndex);
-        });
-
-      if (!follow) {
-        return s_oldActivity;
-      }
-
-      const s_newActivity = Event.getEvents(api, appData.app_id)
-        .filter(({ event }) => {
-          return event === 'DEPLOYMENT_ACTION_BEGIN'
-            || event === 'DEPLOYMENT_ACTION_END';
-        })
-        .map(({ date, data: { state, action, commit, cause } }) => {
-          return { date, state, action, commit, cause, isLast: true };
-        })
-        .skipDuplicates(_.isEqual);
-
-      return s_oldActivity.merge(s_newActivity);
-    })
-    .scan({}, (previousEvent, event) => {
-      if (isTemporaryEvent(previousEvent)) {
-        clearPreviousLine();
-      }
-
-      const activityLine = formatActivityLine(event);
-      Logger.println(activityLine);
-
-      return event;
-    });
-
-  handleCommandStream(s_activity);
+  return event;
 }
 
-module.exports = activity;
+function onEvent (previousEvent, newEvent) {
+  const { event, date, data: { state, action, commit, cause } } = newEvent;
+  if (event !== 'DEPLOYMENT_ACTION_BEGIN' && event !== 'DEPLOYMENT_ACTION_END') {
+    return previousEvent;
+  }
+  return handleEvent(previousEvent, { date, state, action, commit, cause, isLast: true });
+}
+
+async function activity (params) {
+  const { alias, 'show-all': showAll, follow } = params.options;
+  const { ownerId, appId } = await AppConfig.getAppDetails({ alias });
+  const events = await Activity.list(ownerId, appId, showAll);
+  const reversedArrayWithIndex = events
+    .reverse()
+    .map((event, index, all) => {
+      const isLast = index === all.length - 1;
+      return ({ ...event, isLast });
+    });
+  let lastEvent = reversedArrayWithIndex.reduce(handleEvent, {});
+
+  if (!follow) {
+    return lastEvent;
+  }
+
+  const { apiHost, tokens } = await getHostAndTokens();
+  const eventsStream = new EventsStream({ apiHost, tokens, appId });
+
+  const deferred = new Deferred();
+
+  eventsStream
+    .on('open', () => Logger.debug('WS for events (open) ' + JSON.stringify({ appId })))
+    .on('event', (event) => {
+      lastEvent = onEvent(lastEvent, event);
+      return lastEvent;
+    })
+    .on('ping', () => Logger.debug('WS for events (ping)'))
+    .on('close', ({ reason }) => Logger.debug('WS for events (close) ' + reason))
+    .on('error', deferred.reject);
+
+  eventsStream.open({ autoRetry: true, maxRetryCount: 6 });
+
+  return deferred.promise;
+}
+
+module.exports = { activity };

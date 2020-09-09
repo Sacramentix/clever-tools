@@ -2,8 +2,11 @@
 
 const fs = require('fs');
 const path = require('path');
+const util = require('util');
 
-const Bacon = require('baconjs');
+const readFile = util.promisify(fs.readFile);
+const writeFile = util.promisify(fs.writeFile);
+
 const commonEnv = require('common-env');
 const mkdirp = require('mkdirp');
 const xdg = require('xdg');
@@ -20,34 +23,35 @@ function getConfigPath () {
   }
 }
 
-function loadOAuthConf () {
+async function loadOAuthConf () {
   Logger.debug('Load configuration from environment variables');
   if (process.env.CLEVER_TOKEN != null && process.env.CLEVER_SECRET != null) {
-    return Bacon
-      .once({
-        token: process.env.CLEVER_TOKEN,
-        secret: process.env.CLEVER_SECRET,
-      })
-      .toProperty();
+    return {
+      token: process.env.CLEVER_TOKEN,
+      secret: process.env.CLEVER_SECRET,
+    };
   }
   Logger.debug('Load configuration from ' + conf.CONFIGURATION_FILE);
-  return Bacon.fromNodeCallback(fs.readFile, conf.CONFIGURATION_FILE)
-    .flatMapLatest(Bacon.try(JSON.parse))
-    .flatMapError((error) => {
-      // TODO propagate this
-      Logger.info(new Bacon.Error(`Cannot load configuration from ${conf.CONFIGURATION_FILE}\n${error.message}`));
-      return {};
-    });
+  try {
+    const rawFile = await readFile(conf.CONFIGURATION_FILE);
+    return JSON.parse(rawFile);
+  }
+  catch (error) {
+    Logger.info(`Cannot load configuration from ${conf.CONFIGURATION_FILE}\n${error.message}`);
+    return {};
+  }
 }
 
-function writeOAuthConf (oauthData) {
+async function writeOAuthConf (oauthData) {
   Logger.debug('Write the tokens in the configuration file…');
   const configDir = path.dirname(conf.CONFIGURATION_FILE);
-  return Bacon
-    .fromNodeCallback(mkdirp, configDir, { mode: 0o700 })
-    .flatMapLatest(() => {
-      return Bacon.fromNodeCallback(fs.writeFile, conf.CONFIGURATION_FILE, JSON.stringify(oauthData));
-    });
+  try {
+    await mkdirp(configDir, { mode: 0o700 });
+    await writeFile(conf.CONFIGURATION_FILE, JSON.stringify(oauthData));
+  }
+  catch (error) {
+    throw new Error(`Cannot write configuration to ${conf.CONFIGURATION_FILE}\n${error.message}`);
+  }
 }
 
 const conf = env.getOrElseAll({
@@ -56,6 +60,7 @@ const conf = env.getOrElseAll({
   LOG_WS_URL: 'wss://api.clever-cloud.com/v2/logs/logs-socket/<%- appId %>?since=<%- timestamp %>',
   LOG_HTTP_URL: 'https://api.clever-cloud.com/v2/logs/<%- appId %>',
   EVENT_URL: 'wss://api.clever-cloud.com/v2/events/event-socket',
+  WARP_10_EXEC_URL: 'https://c1-warp10-clevercloud-customers.services.clever-cloud.com/api/v0/exec',
   OAUTH_CONSUMER_KEY: 'T5nFjKeHH4AIlEveuGhB5S3xg8T19e',
   OAUTH_CONSUMER_SECRET: 'MgVMqTr6fWlf2M0tkC2MXOnhfqBWDT',
   SSH_GATEWAY: 'ssh@sshgateway-clevercloud-customers.services.clever-cloud.com',

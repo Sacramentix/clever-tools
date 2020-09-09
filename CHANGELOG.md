@@ -1,8 +1,148 @@
 # clever-tools changelog
 
-## 1.6.3 (2019-10-08)
+## 2.7.1 (2020-08-21)
+
+* Fix linux-release-info usage in `clever diag`
+
+## 2.7.0 (2020-08-20) 
+
+* Improve `clever deploy` perfs in several cases (partial push, force push...)
+  * NOTE: Pushing a brand new repo is still slow in some situations
+* Add commands for favourite domains (Julien Tanguy)
+  * `clever domain` now displays a star prefix `*` before the favourite domain in the list
+  * `clever domain favourite` just displays the favourite domain (no prefix)
+  * `clever domain favourite set example.com` sets the favourite domain to `example.com`
+  * `clever domain favourite unset` unsets the favourite domain for this app
+* Add a message while waiting for deploy to start `clever deploy` and `clever restart` 
+* Add shallow detection with appropriate error message for `clever deploy` 
+* Fix `clever status` typo in output (Clément Delafargue)
+* Fix `clever env` error message when JSON input is incorrect (Jean Baptiste Noblot)
+* Update dependencies
+
+This is the one with the latest isomorphic-git!!!
+
+## 2.6.1 (2020-05-29)
+
+* Fix `clever restart` default cache behaviour and option `--without-cache`
+* Fix `clever config` docs wording (Clément Delafargue)
+
+## 2.6.0 (2020-05-28)
+
+* Add `--addon` option for all `clever drain` commands
+
+## 2.5.0 (2020-05-26)
+
+* Add `clever config` command to configure application options
+  * Existing supported options: `name`, `description`, `zero-downtime`, `sticky-sessions` and `cancel-on-push`
+  * New supported option: `force-https`
+* Add `--follow` to `clever deploy` and `clever restart` so you can continue to follow logs after the deployment is finished 
+* Fix #318 where `clever deploy` and `clever restart` would sometimes never exit
+   * We changed the way we detect when a deployment is finished
+* Fix #304 where `clever logs` would run endlessly even when using `--before/--until`
+
+### Internals
+
+* We completely removed our dependency to Bacon.js, goodbye old friend 😘
+* `@clevercloud/client` was updated to `6.0.0` so we can use the new event based API for logs and events 
+
+## 2.4.0 (2020-04-16)
+
+* Add `--json` option to `clever env import` and `clever published-config import` (Clément Delafargue)
+
+## 2.3.0 (2020-03-30)
+
+* Add `clever tcp-redirs` command to configure TCP redirections
+
+## 2.2.3 (2020-03-30)
+
+- Fix `link` when app ID is not in personal space
+
+## 2.2.2 (2020-03-28)
+
+- Fix `login` and `logout` commands, update mkdirp usage (new version returns a promise)
+
+## 2.2.1 (2020-03-27)
+
+### For users
+
+- Fix drain type autocomplete
+- Always save `org_id` in `.clever.json` with `clever link`
+- Add on API calls when `CLEVER_VERBOSE` is enabled
+
+### Internals
+
+We did a bit refactor in the codebase, less bacon, more promises and no more legacy clever-client!!
+
+- Remove Bacon from `Interact.confirm()`
+- Update @clevercloud/client to 5.0.1 (with fixed/improved function names)
+- Add `getAppDetails()` in app_configuration
+- Cleanup in models/addon
+- Cleanup in models/application
+- Cleanup in models/organisation
+- Refactor `clever addon` (less Bacon, more promise)
+- Refactor `clever applications` (less Bacon, more promise)
+- Refactor `clever cancel-deploy` (less Bacon, more promise)
+- Refactor `clever console` (less Bacon, more promise)
+- Refactor `clever create` (less Bacon, more promise)
+- Refactor `clever delete` (less Bacon, more promise)
+- Refactor `clever deploy` and `clever restart` (less Bacon, more promise)
+- Refactor `clever domain` (less Bacon, more promise)
+- Refactor `clever link` (less Bacon, more promise)
+- Refactor `clever logs` (less Bacon, more promise)
+- Refactor `clever service` (less Bacon, more promise)
+- Refactor `clever ssh` (less Bacon, more promise)
+- Refactor `clever stop` (less Bacon, more promise)
+- Refactor `clever unlink` (less Bacon, more promise)
+- Refactor `make-default` command (less Bacon, more promise)
+- Remove legacy clever-client usage with API client injection
+- Remove unused `getAppData()` from app_configuration
+- Use `getAppDetails()` in `clever accesslogs`
+- Use `getAppDetails()` in `clever activity`
+- Use `getAppDetails()` in `clever drain`
+- Use `getAppDetails()` in `clever env`
+- Use `getAppDetails()` in `clever open`
+- Use `getAppDetails()` in `clever published-config`
+- Use `getAppDetails()` in `clever scale`
+- Use `getAppDetails()` in `clever status`
+- Use `getAppDetails()` in notification model
+
+## 2.2.0 (2020-03-26)
+
+* Alias `after/before` to `since/until` in commands `logs` and `accesslogs`
+* Fix `clever accesslogs` with `--before` and/or `--after` params
+
+## 2.1.1 (2020-03-24)
+
+* Fix `clever scale --build-flavor`
+
+## 2.1.0 (2020-03-20)
+
+* Add `clever accesslogs` command to get history and contiuous access logs for apps and add-ons (fix #360)
+* Improve `clever notify-email` options handling and help
+* Warn about node version if there is an error
+* Enable small image for release via docker image
+
+## 2.0.0 (2020-03-06)
+
+* Enable node engines >=12 (fix #358)
+* Add elixir in autocomplete (fix #359)
+* Add new `clever env import-vars FOO,BAR,BAZ` command
+* Handle error when the .git folder is not found (fix #357) (Sacramentix)
+
+### ⚠️ BREAKING CHANGES
+
+* Update @clevercloud/client to 3.0.0 (fix env-var parsing/serialization)
+
+Be careful if you use `clever env import` with `2.0.0` with a file that was generated with an older version.
+
+Please read [PR 18](https://github.com/CleverCloud/clever-client.js/pull/18) for more details.
+
+## 1.6.3 (2020-03-03)
 
 - Fix git commit display before a `clever restart` (for new empty repos)
+- Fix issue when config dir does not exist
+- Fix error handling (like ECONNRESET) via `@clevercloud/client@2.3.1`
+- Fix some connection errors via `@clevercloud/client@2.3.1`
 
 ## 1.6.2 (2019-10-03)
 

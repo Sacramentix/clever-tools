@@ -2,6 +2,7 @@
 
 const cliparse = require('cliparse');
 
+const AccessLogs = require('./models/accesslogs.js');
 const Application = require('./models/application.js');
 
 function flavor (flavor) {
@@ -69,6 +70,22 @@ function commaSeparated (string) {
   return cliparse.parsers.success(string.split(','));
 }
 
+function accessLogsFormat (format) {
+  const availableFormats = AccessLogs.listAvailableFormats();
+  if (availableFormats.includes(format)) {
+    return cliparse.parsers.success(format);
+  }
+  return cliparse.parsers.error('The format must be one of ' + availableFormats.join(', '));
+}
+
+function integer (string) {
+  const integer = parseInt(string);
+  if (isNaN(integer)) {
+    return cliparse.parsers.error('Invalid number: ' + string);
+  }
+  return cliparse.parsers.success(integer);
+}
+
 module.exports = {
   buildFlavor,
   flavor,
@@ -78,4 +95,6 @@ module.exports = {
   orgaIdOrName,
   addonIdOrName,
   commaSeparated,
+  accessLogsFormat,
+  integer,
 };

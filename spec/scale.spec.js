@@ -1,7 +1,6 @@
-var path = require("path");
+'use strict';
 
 var _ = require("lodash");
-var Bacon = require("baconjs");
 var expect = require('chai').expect;
 
 var Application = require("../src/models/application.js");
@@ -28,7 +27,7 @@ describe("scale-merge-parameters", function() {
 
     scalabilityParameters.minFlavor = "M";
 
-    instance = Application.mergeScalabilityParameters(scalabilityParameters, instance);
+    instance = Application.__mergeScalabilityParameters(scalabilityParameters, instance);
     expect(instance.maxFlavor).to.equal("M");
   });
 
@@ -38,7 +37,7 @@ describe("scale-merge-parameters", function() {
 
     scalabilityParameters.maxFlavor = "XS";
 
-    instance = Application.mergeScalabilityParameters(scalabilityParameters, instance);
+    instance = Application.__mergeScalabilityParameters(scalabilityParameters, instance);
     expect(instance.minFlavor).to.equal("XS");
   });
 
@@ -48,7 +47,7 @@ describe("scale-merge-parameters", function() {
 
     scalabilityParameters.minInstances = 6;
 
-    instance = Application.mergeScalabilityParameters(scalabilityParameters, instance);
+    instance = Application.__mergeScalabilityParameters(scalabilityParameters, instance);
     expect(instance.maxInstances).to.equal(6);
   });
 
@@ -58,7 +57,7 @@ describe("scale-merge-parameters", function() {
 
     scalabilityParameters.maxInstances = 4;
 
-    instance = Application.mergeScalabilityParameters(scalabilityParameters, instance);
+    instance = Application.__mergeScalabilityParameters(scalabilityParameters, instance);
     expect(instance.minInstances).to.equal(4);
   });
 });

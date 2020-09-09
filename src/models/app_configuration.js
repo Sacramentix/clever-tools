@@ -1,72 +1,65 @@
 'use strict';
 
-const fs = require('fs');
+const { promises: fs } = require('fs');
 const path = require('path');
 
 const _ = require('lodash');
-const Bacon = require('baconjs');
 const slugify = require('slugify');
 
-const { conf } = require('./configuration.js');
 const Logger = require('../logger.js');
+const User = require('./user.js');
+const { conf } = require('./configuration.js');
 
 // TODO: Maybe use fs-utils findPath()
-function loadApplicationConf (ignoreParentConfig = false, pathToFolder) {
+async function loadApplicationConf (ignoreParentConfig = false, pathToFolder) {
   if (pathToFolder == null) {
     pathToFolder = path.dirname(conf.APP_CONFIGURATION_FILE);
   }
   const fileName = path.basename(conf.APP_CONFIGURATION_FILE);
   const fullPath = path.join(pathToFolder, fileName);
   Logger.debug('Loading app configuration from ' + fullPath);
-  return Bacon.fromNodeCallback(fs.readFile, fullPath)
-    .flatMapLatest(Bacon.try(JSON.parse))
-    .flatMapError((error) => {
-      Logger.info('Cannot load app configuration from ' + conf.APP_CONFIGURATION_FILE + ' (' + error + ')');
-      if (ignoreParentConfig || path.parse(pathToFolder).root === pathToFolder) {
-        return { apps: [] };
-      }
-      return loadApplicationConf(ignoreParentConfig, path.normalize(path.join(pathToFolder, '..')));
-    });
+  try {
+    const contents = await fs.readFile(fullPath);
+    return JSON.parse(contents);
+  }
+  catch (error) {
+    Logger.info('Cannot load app configuration from ' + conf.APP_CONFIGURATION_FILE + ' (' + error + ')');
+    if (ignoreParentConfig || path.parse(pathToFolder).root === pathToFolder) {
+      return { apps: [] };
+    }
+    return loadApplicationConf(ignoreParentConfig, path.normalize(path.join(pathToFolder, '..')));
+  }
 };
 
-function addLinkedApplication (appData, alias, ignoreParentConfig) {
-  const currentConfig = loadApplicationConf(ignoreParentConfig);
+async function addLinkedApplication (appData, alias, ignoreParentConfig) {
+  const currentConfig = await loadApplicationConf(ignoreParentConfig);
+
   const appEntry = {
     app_id: appData.id,
+    org_id: appData.ownerId,
     deploy_url: appData.deployment.httpUrl || appData.deployment.url,
     name: appData.name,
     alias: alias || slugify(appData.name),
   };
 
-  if (appData.ownerId.substr(0, 5) === 'orga_') appEntry.org_id = appData.ownerId;
+  const isPresent = currentConfig.apps.find((app) => app.app_id === appEntry.app_id) != null;
 
-  const s_newConfig = currentConfig.flatMapLatest(function (config) {
-    const isPresent = !_.find(config.apps, function (app) {
-      return app.app_id === appEntry.app_id;
-    });
+  // ToDo see what to do when there is a conflict between an existing entry
+  // and the entry we want to add (same app_id, different other values)
+  if (!isPresent) {
+    currentConfig.apps.push(appEntry);
+  }
 
-    // ToDo see what to do when there is a conflict between an existing entry
-    // and the entry we want to add (same app_id, different other values)
-    if (isPresent) {
-      config.apps.push(appEntry);
-    }
-    return config;
-  });
-
-  return s_newConfig.flatMapLatest(persistConfig);
+  return persistConfig(currentConfig);
 };
 
-function removeLinkedApplication (alias) {
-  const currentConfig = loadApplicationConf();
-
-  const s_newConfig = currentConfig.flatMapLatest(function (config) {
-    config.apps = _.reject(config.apps, function (appEntry) {
-      return appEntry.alias === alias;
-    });
-    return config;
-  });
-
-  return s_newConfig.flatMapLatest(persistConfig);
+async function removeLinkedApplication (alias) {
+  const currentConfig = await loadApplicationConf();
+  const newConfig = {
+    ...currentConfig,
+    apps: currentConfig.apps.filter((appEntry) => appEntry.alias !== alias),
+  };
+  return persistConfig(newConfig);
 };
 
 function findApp (config, alias) {
@@ -89,7 +82,7 @@ function findApp (config, alias) {
   if (config.default != null) {
     const defaultApp = _.find(config.apps, { app_id: config.default });
     if (defaultApp == null) {
-      throw new Error(`The default application is not listed anymore. This should not happen, your \`.clever.json\` should be fixed.`);
+      throw new Error('The default application is not listed anymore. This should not happen, your `.clever.json` should be fixed.');
     }
     return defaultApp;
   }
@@ -102,23 +95,31 @@ function findApp (config, alias) {
   throw new Error(`Several applications are linked. You can specify one with the "--alias" option. Run "clever applications" to list linked applications. Available aliases: ${aliases}`);
 }
 
-function getAppData (alias) {
-  return loadApplicationConf()
-    .flatMap(Bacon.try((config) => findApp(config, alias)));
+async function getAppDetails ({ alias }) {
+  const config = await loadApplicationConf();
+  const app = findApp(config, alias);
+  const ownerId = (app.org_id != null)
+    ? app.org_id
+    : await User.getCurrentId();
+  return {
+    appId: app.app_id,
+    ownerId: ownerId,
+    deployUrl: app.deploy_url,
+    name: app.name,
+    alias: app.alias,
+  };
 };
 
 function persistConfig (modifiedConfig) {
   const jsonContents = JSON.stringify(modifiedConfig);
-  return Bacon.fromNodeCallback(fs.writeFile, conf.APP_CONFIGURATION_FILE, jsonContents);
+  return fs.writeFile(conf.APP_CONFIGURATION_FILE, jsonContents);
 };
 
-function setDefault (alias) {
-  return loadApplicationConf()
-    .flatMap(Bacon.try((config) => {
-      const app = findApp(config, alias);
-      return _.assign({}, config, { default: app.app_id });
-    }))
-    .flatMapLatest(persistConfig);
+async function setDefault (alias) {
+  const config = await loadApplicationConf();
+  const app = findApp(config, alias);
+  const newConfig = { ...config, default: app.app_id };
+  return persistConfig(newConfig);
 }
 
 module.exports = {
@@ -126,6 +127,6 @@ module.exports = {
   addLinkedApplication,
   removeLinkedApplication,
   findApp,
-  getAppData,
+  getAppDetails,
   setDefault,
 };

@@ -1,41 +1,32 @@
 'use strict';
 
-const Bacon = require('baconjs');
 const colors = require('colors/safe');
 
 const AppConfig = require('../models/app_configuration.js');
 const Application = require('../models/application.js');
-const git = require('../models/git');
-const handleCommandStream = require('../command-stream-handler');
-const Log = require('../models/log');
+const git = require('../models/git.js');
+const Log = require('../models/log.js');
 const Logger = require('../logger.js');
 
-function restart (api, params) {
-  const { alias, quiet, commit, 'without-cache': withoutCache } = params.options;
+// Once the API call to redeploy() has been triggerred successfully,
+// the rest (waiting for deployment state to evolve and displaying logs) is done with auto retry (resilient to network pb)
+async function restart (params) {
+  const { alias, quiet, commit, 'without-cache': withoutCache, follow } = params.options;
 
-  const s_appData = AppConfig.getAppData(alias);
-  const s_fullCommitId = git.resolveFullCommitId(commit);
-  const s_remoteCommitId = s_appData
-    .flatMapLatest(({ app_id, app_orga }) => Application.get(api, app_id, app_orga))
-    .flatMapLatest(({ commitId }) => commitId);
+  const { ownerId, appId, name: appName } = await AppConfig.getAppDetails({ alias });
+  const fullCommitId = await git.resolveFullCommitId(commit);
+  const app = await Application.get(ownerId, appId);
+  const remoteCommitId = app.commitId;
 
-  const s_allLogs = Bacon
-    .combineAsArray(s_appData, s_fullCommitId, s_remoteCommitId)
-    .flatMapLatest(([appData, fullCommitId, remoteCommitId]) => {
-      const commitId = fullCommitId || remoteCommitId;
-      if (commitId != null) {
-        const cacheSuffix = withoutCache ? ' without using cache' : '';
-        Logger.println(`Restarting ${appData.name} on commit ${colors.green(commitId)}${cacheSuffix}`);
-      }
-      const s_redeploy = Application.redeploy(api, appData.app_id, appData.org_id, fullCommitId, withoutCache);
-      return Bacon.combineAsArray(s_redeploy, appData, remoteCommitId);
-    })
-    .flatMapLatest(([redeploy, appData, remoteCommitId]) => {
-      return Log.getAllLogs(api, redeploy, appData, remoteCommitId, quiet);
-    })
-    .map(Logger.println);
+  const commitId = fullCommitId || remoteCommitId;
+  if (commitId != null) {
+    const cacheSuffix = withoutCache ? ' without using cache' : '';
+    Logger.println(`Restarting ${appName} on commit ${colors.green(commitId)}${cacheSuffix}`);
+  }
 
-  handleCommandStream(s_allLogs);
-};
+  const redeploy = await Application.redeploy(ownerId, appId, fullCommitId, withoutCache);
 
-module.exports = restart;
+  return Log.watchDeploymentAndDisplayLogs({ ownerId, appId, deploymentId: redeploy.deploymentId, quiet, follow });
+}
+
+module.exports = { restart };

@@ -61,15 +61,15 @@ function displayScalability (app) {
   Auto scalability: ${enabled ? colors.green('enabled') : colors.red('disabled')}
   Scalers: ${colors.bold(horizontal)}
   Sizes: ${colors.bold(vertical)}
-  Decicated build: ${app.separateBuild ? colors.bold(app.buildFlavor.name) : colors.red('disabled')}`;
+  Dedicated build: ${app.separateBuild ? colors.bold(app.buildFlavor.name) : colors.red('disabled')}`;
 }
 
 async function status (params) {
   const { alias } = params.options;
-  const { org_id, app_id: appId } = await AppConfig.getAppData(alias).toPromise();
+  const { ownerId, appId } = await AppConfig.getAppDetails({ alias });
 
-  const instances = await getAllInstances({ id: org_id, appId }).then(sendToApi);
-  const app = await getApplication({ id: org_id, appId }).then(sendToApi);
+  const instances = await getAllInstances({ id: ownerId, appId }).then(sendToApi);
+  const app = await getApplication({ id: ownerId, appId }).then(sendToApi);
 
   Logger.println(computeStatus(instances, app));
   Logger.println(displayScalability(app));

@@ -1,7 +1,6 @@
 FROM debian AS build
 
 RUN apt-get update && apt-get install -y \
-	libstdc++ \
 	libtool \
 	curl
 
@@ -19,19 +18,19 @@ RUN \
 	mkdir -p /tmp/fakeroot/bin/ && \
 	cp /usr/local/bin/clever /tmp/fakeroot/bin/
 
-
-FROM busybox AS release
+FROM busybox:glibc AS release
 
 LABEL version="<%= version %>" \
 	maintainer="<%= maintainer %>" \
 	description="<%= description %>" \
 	license="<%= license %>"
 
-WORKDIR /
+VOLUME ["/actions"]
+WORKDIR /actions
 
 COPY --from=build /tmp/fakeroot/ /
 
-# The loader search ld-linux-x86-64.so.2 in /lib64 but the folder does not exist
+## The loader search ld-linux-x86-64.so.2 in /lib64 but the folder does not exist
 RUN ln -s lib lib64
 
 ENTRYPOINT ["clever"]
